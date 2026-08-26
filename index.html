@@ -3,16 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Client Management System</title>
+    <title>Legal Client Management System - Firebase</title>
     <!-- jsPDF and AutoTable for PDF Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-    <!-- SheetJS Library for Excel Import -->
+    <!-- SheetJS for Excel Import & Template Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-    <!-- Firebase SDKs (v10.8.0 Compat Mode for HTML direct script use) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <style>
         :root {
@@ -119,7 +115,6 @@
             font-weight: 600;
         }
 
-        /* Hide main application until logged in */
         .app-container {
             display: none;
         }
@@ -179,7 +174,6 @@
             box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
         }
 
-        /* Live Search Dropdown Results List */
         .search-results-dropdown {
             position: absolute;
             top: 100%;
@@ -227,6 +221,7 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .counter-badge {
@@ -385,14 +380,11 @@
         .btn-csv { background-color: var(--warning-color); }
         .btn-csv:hover { background-color: #b45309; }
 
-        .btn-backup { background-color: #0d9488; }
-        .btn-backup:hover { background-color: #0f766e; }
+        .btn-excel-import { background-color: #047857; }
+        .btn-excel-import:hover { background-color: #065f46; }
 
-        .btn-restore { background-color: #8b5cf6; }
-        .btn-restore:hover { background-color: #7c3aed; }
-
-        .btn-excel-import { background-color: #059669; }
-        .btn-excel-import:hover { background-color: #047857; }
+        .btn-excel-template { background-color: #6366f1; }
+        .btn-excel-template:hover { background-color: #4f46e5; }
 
         .btn-logout { background-color: #475569; }
         .btn-logout:hover { background-color: #334155; }
@@ -559,9 +551,10 @@
 
     <!-- MAIN APP CONTAINER -->
     <div class="container app-container" id="appContainer">
+        <!-- Top Bar with Integrated Search -->
         <div class="top-bar">
             <div class="top-bar-left">
-                <div class="top-bar-title">System Control</div>
+                <div class="top-bar-title">System Control (Cloud Sync)</div>
                 <div class="counter-badge" id="topTotalContactsBadge">Total Contacts: 0</div>
             </div>
 
@@ -572,12 +565,10 @@
 
             <div class="top-bar-actions">
                 <button type="button" class="btn-excel-import" onclick="triggerExcelImport()">Excel Import</button>
-                <button type="button" class="btn-backup" onclick="backupData()">Backup Data</button>
-                <button type="button" class="btn-restore" onclick="triggerRestore()">Restore Data</button>
+                <button type="button" class="btn-excel-template" onclick="downloadExcelTemplate()">Download Excel Format</button>
                 <button type="button" class="btn-logout" onclick="logout()">Logout</button>
-
+                
                 <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="importExcelData(event)">
-                <input type="file" id="restoreFileInput" accept=".json" style="display: none;" onchange="restoreData(event)">
             </div>
         </div>
 
@@ -651,7 +642,7 @@
         </div>
 
         <div class="card">
-            <h2>Stored Records</h2>
+            <h2>Stored Records (Cloud Database)</h2>
             <div id="searchFlashMsg" class="search-flash-msg"></div>
 
             <div class="table-responsive">
@@ -692,35 +683,32 @@
         </div>
     </div>
 
-    <script>
-        // -------------------------------------------------------------
-        // FIREBASE CONFIGURATION (UPDATED WITH YOUR REAL KEYS)
-        // -------------------------------------------------------------
+    <!-- Firebase SDK Modular Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
         const firebaseConfig = {
-            apiKey: "AIzaSyD2laXbCMI66QTxsMUYZK_NWK4pr-btnBE",
-            authDomain: "contact-d0800.firebaseapp.com",
-            projectId: "contact-d0800",
-            storageBucket: "contact-d0800.firebasestorage.app",
-            messagingSenderId: "237271579660",
-            appId: "1:237271579660:web:b754cbe38870054b8dc229",
-            measurementId: "G-039M02BZE4"
+            apiKey: "AIzaSyA4SiYk7Xo6vfEmZKj28iWCxRShejYcpDA",
+            authDomain: "logbook-9ac1d.firebaseapp.com",
+            projectId: "logbook-9ac1d",
+            storageBucket: "logbook-9ac1d.firebasestorage.app",
+            messagingSenderId: "216931672281",
+            appId: "1:216931672281:web:6bcedc21ab0be66133dec8",
+            measurementId: "G-142Z6R2G56"
         };
 
         // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const clientsCollection = db.collection("clientCaseRecords");
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
         let clients = [];
-        let unsubscribeRealtime = null;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if (isLoggedInCookieSet()) {
-                showApp();
-            } else {
-                document.getElementById('loginOverlay').style.display = 'flex';
-                document.getElementById('appContainer').style.display = 'none';
-            }
+        window.addEventListener('DOMContentLoaded', () => {
+            // Memory verification state checks can be handled via simple cookie/state flags if required,
+            // but LocalStorage/SessionStorage have been entirely stripped out for data storage.
+            document.getElementById('loginOverlay').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
 
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.top-search-container')) {
@@ -728,10 +716,6 @@
                 }
             });
         });
-
-        function isLoggedInCookieSet() {
-            return document.cookie.split('; ').some(row => row.startsWith('isLoggedIn=true'));
-        }
 
         // Handle Login Submission
         document.getElementById('loginForm').addEventListener('submit', function(e) {
@@ -741,7 +725,6 @@
             const errorMsg = document.getElementById('loginError');
 
             if (id === 'Admin' && pass === 'Admin@123') {
-                document.cookie = "isLoggedIn=true; path=/; max-age=86400"; // 24-hour persistent cookie
                 errorMsg.style.display = 'none';
                 showApp();
             } else {
@@ -749,32 +732,31 @@
             }
         });
 
-        // Display Main Application and Setup Firestore Realtime Sync
         function showApp() {
             document.getElementById('loginOverlay').style.display = 'none';
             document.getElementById('appContainer').style.display = 'block';
-
-            // Real-time Cloud Sync Listener across devices
-            unsubscribeRealtime = clientsCollection.onSnapshot((snapshot) => {
-                clients = [];
-                snapshot.forEach((doc) => {
-                    clients.push({ id: doc.id, ...doc.data() });
-                });
-                renderTable();
-            }, (error) => {
-                console.error("Firebase Sync Error: ", error);
-            });
+            initRealtimeSync();
         }
 
-        // Logout function
         function logout() {
-            document.cookie = "isLoggedIn=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-            if (unsubscribeRealtime) unsubscribeRealtime();
             location.reload();
         }
 
-        // Search Input Handler
-        function handleSearchInput() {
+        // Real-time synchronization from Cloud Firestore
+        function initRealtimeSync() {
+            onSnapshot(collection(db, "clients"), (snapshot) => {
+                clients = [];
+                snapshot.forEach((docSnap) => {
+                    clients.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                renderTable();
+                checkDuplicatePvsd();
+            }, (error) => {
+                console.error("Error fetching realtime data: ", error);
+            });
+        }
+
+        window.handleSearchInput = function() {
             renderTable();
             renderSearchDropdown();
         }
@@ -789,15 +771,14 @@
                 return;
             }
 
-            const matches = clients.map((client, originalIndex) => ({ ...client, originalIndex }))
-                .filter(c => {
-                    return c.clientName.toLowerCase().includes(searchQuery) ||
-                           c.mobile1.toLowerCase().includes(searchQuery) ||
-                           (c.mobile2 && c.mobile2.toLowerCase().includes(searchQuery)) ||
-                           c.courtName.toLowerCase().includes(searchQuery) ||
-                           c.section.toLowerCase().includes(searchQuery) ||
-                           c.pvsd.toLowerCase().includes(searchQuery);
-                });
+            const matches = clients.filter(c => {
+                return c.clientName.toLowerCase().includes(searchQuery) ||
+                       c.mobile1.toLowerCase().includes(searchQuery) ||
+                       (c.mobile2 && c.mobile2.toLowerCase().includes(searchQuery)) ||
+                       c.courtName.toLowerCase().includes(searchQuery) ||
+                       c.section.toLowerCase().includes(searchQuery) ||
+                       c.pvsd.toLowerCase().includes(searchQuery);
+            });
 
             if (matches.length === 0) {
                 dropdown.innerHTML = `<div class="search-result-item" style="color: #64748b;">No matching records found</div>`;
@@ -807,7 +788,7 @@
                     div.className = 'search-result-item';
                     div.onclick = () => {
                         dropdown.style.display = 'none';
-                        selectRecordFromSearch(item.originalIndex);
+                        selectRecordFromSearch(item.id);
                     };
 
                     div.innerHTML = `
@@ -817,18 +798,18 @@
                     dropdown.appendChild(div);
                 });
             }
-
             dropdown.style.display = 'block';
         }
 
-        function selectRecordFromSearch(originalIndex) {
-            showSummaryModal(originalIndex);
-            setTimeout(() => {
-                window.print();
-            }, 300);
+        function selectRecordFromSearch(docId) {
+            const index = clients.findIndex(c => c.id === docId);
+            if (index !== -1) {
+                showSummaryModal(index);
+                setTimeout(() => { window.print(); }, 300);
+            }
         }
 
-        function checkDuplicatePvsd() {
+        window.checkDuplicatePvsd = function() {
             const pvsdInput = document.getElementById('pvsd');
             const alertContainer = document.getElementById('duplicateAlertContainer');
             const matchesList = document.getElementById('duplicateMatchesList');
@@ -843,7 +824,7 @@
             }
 
             const matchingRecords = clients.filter((client) => {
-                if (editDocId !== "" && client.id === editDocId) return false;
+                if (editDocId && client.id === editDocId) return false;
                 return client.pvsd.toLowerCase().includes(val);
             });
 
@@ -855,7 +836,6 @@
                         <strong>Court:</strong> ${escapeHtml(c.courtName)} | <strong>Client:</strong> ${escapeHtml(c.clientName)} (${escapeHtml(c.mobile1)})
                     </div>
                 `).join('');
-
                 alertContainer.style.display = 'block';
                 return true;
             } else {
@@ -866,11 +846,11 @@
             }
         }
 
-        // Cloud Form Submit Handler (Firebase Firestore Add/Update)
+        // Form Submit Handler (Saves or Updates in Firebase)
         document.getElementById('clientForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            if (checkDuplicatePvsd()) {
+            if (window.checkDuplicatePvsd()) {
                 alert('⚠️ Warning: Similar Case Found!\n\nA matching or similar Plaintiff V/s Defendant entry already exists in the records.');
                 document.getElementById('pvsd').focus();
                 return;
@@ -891,156 +871,18 @@
             const editDocId = document.getElementById('editDocId').value;
 
             try {
-                if (editDocId === "") {
-                    // Create New Record in Cloud
-                    await clientsCollection.add(clientData);
+                if (!editDocId) {
+                    await addDoc(collection(db, "clients"), clientData);
                 } else {
-                    // Update Record in Cloud
-                    await clientsCollection.doc(editDocId).update(clientData);
+                    const docRef = doc(db, "clients", editDocId);
+                    await updateDoc(docRef, clientData);
                 }
                 resetForm();
             } catch (err) {
-                alert("Error saving record to cloud: " + err.message);
+                console.error("Error saving document: ", err);
+                alert("Error saving record to database.");
             }
         });
-
-        function isRecordDuplicate(existingRecords, candidateRecord) {
-            const candName = (candidateRecord.clientName || '').trim().toLowerCase();
-            const candPvsd = (candidateRecord.pvsd || '').trim().toLowerCase();
-
-            return existingRecords.some(item => {
-                const existingName = (item.clientName || '').trim().toLowerCase();
-                const existingPvsd = (item.pvsd || '').trim().toLowerCase();
-                return (candName !== '' && candName === existingName) &&
-                       (candPvsd !== '' && candPvsd === existingPvsd);
-            });
-        }
-
-        function triggerExcelImport() {
-            document.getElementById('excelFileInput').click();
-        }
-
-        function importExcelData(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
-                    if (!jsonData || jsonData.length === 0) {
-                        alert('The selected Excel file is empty.');
-                        return;
-                    }
-
-                    let addedCount = 0;
-                    let duplicateCount = 0;
-
-                    const batch = db.batch();
-
-                    jsonData.forEach(row => {
-                        let formattedDate = '';
-                        const rawDate = row['Case Institution Date'] || row['Institution Date'] || row['Date'] || '';
-                        
-                        if (rawDate instanceof Date) {
-                            formattedDate = rawDate.toISOString().split('T')[0];
-                        } else {
-                            formattedDate = String(rawDate).trim();
-                        }
-
-                        const newClient = {
-                            courtName: String(row['Court Name'] || '').trim(),
-                            pvsd: String(row['Plaintiff V/s Defendant'] || row['Pvsd'] || '').trim(),
-                            section: String(row['Section'] || '').trim(),
-                            institutionDate: formattedDate,
-                            clientName: String(row['Client Name'] || '').trim(),
-                            mobile1: String(row['Client Mobile Number 1'] || row['Mobile 1'] || '').trim(),
-                            mobile2: String(row['Client Mobile Number 2'] || row['Mobile 2'] || '').trim(),
-                            clientAddress: String(row['Client Address'] || row['Address'] || '').trim(),
-                            otherNote: String(row['Other Note'] || row['Note'] || '').trim()
-                        };
-
-                        if (!newClient.clientName && !newClient.courtName && !newClient.pvsd) {
-                            return;
-                        }
-
-                        if (isRecordDuplicate(clients, newClient)) {
-                            duplicateCount++;
-                        } else {
-                            const newDocRef = clientsCollection.doc();
-                            batch.set(newDocRef, newClient);
-                            addedCount++;
-                        }
-                    });
-
-                    await batch.commit();
-                    resetForm();
-                    alert(`Excel Import Complete:\n• Added ${addedCount} new unique record(s) to Cloud.\n• Skipped ${duplicateCount} duplicate record(s).`);
-                } catch (err) {
-                    alert('Error importing data to Cloud: ' + err.message);
-                }
-                event.target.value = '';
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        function triggerRestore() {
-            document.getElementById('restoreFileInput').click();
-        }
-
-        function restoreData(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                try {
-                    const importedData = JSON.parse(e.target.result);
-                    if (Array.isArray(importedData)) {
-                        let addedCount = 0;
-                        let duplicateCount = 0;
-                        const batch = db.batch();
-
-                        importedData.forEach(item => {
-                            const candidate = {
-                                courtName: String(item.courtName || '').trim(),
-                                pvsd: String(item.pvsd || '').trim(),
-                                section: String(item.section || '').trim(),
-                                institutionDate: String(item.institutionDate || '').trim(),
-                                clientName: String(item.clientName || '').trim(),
-                                mobile1: String(item.mobile1 || '').trim(),
-                                mobile2: String(item.mobile2 || '').trim(),
-                                clientAddress: String(item.clientAddress || '').trim(),
-                                otherNote: String(item.otherNote || '').trim()
-                            };
-
-                            if (isRecordDuplicate(clients, candidate)) {
-                                duplicateCount++;
-                            } else {
-                                const newDocRef = clientsCollection.doc();
-                                batch.set(newDocRef, candidate);
-                                addedCount++;
-                            }
-                        });
-
-                        await batch.commit();
-                        resetForm();
-                        alert(`Data Restore Complete:\n• Added ${addedCount} record(s) to Cloud.\n• Skipped ${duplicateCount} duplicate record(s).`);
-                    } else {
-                        alert('Invalid backup file format.');
-                    }
-                } catch (err) {
-                    alert('Error restoring backup JSON file to Cloud.');
-                }
-                event.target.value = '';
-            };
-            reader.readAsText(file);
-        }
 
         function renderTable() {
             const tbody = document.getElementById('tableBody');
@@ -1048,28 +890,27 @@
             const flashMsg = document.getElementById('searchFlashMsg');
             tbody.innerHTML = '';
 
-            const filteredClients = clients.map((client, originalIndex) => ({ ...client, originalIndex }))
-                .filter(c => {
-                    return c.clientName.toLowerCase().includes(searchQuery) ||
-                           c.mobile1.toLowerCase().includes(searchQuery) ||
-                           (c.mobile2 && c.mobile2.toLowerCase().includes(searchQuery)) ||
-                           c.courtName.toLowerCase().includes(searchQuery) ||
-                           c.section.toLowerCase().includes(searchQuery) ||
-                           c.pvsd.toLowerCase().includes(searchQuery);
-                });
+            const filteredClients = clients.filter(c => {
+                return c.clientName.toLowerCase().includes(searchQuery) ||
+                       c.mobile1.toLowerCase().includes(searchQuery) ||
+                       (c.mobile2 && c.mobile2.toLowerCase().includes(searchQuery)) ||
+                       c.courtName.toLowerCase().includes(searchQuery) ||
+                       c.section.toLowerCase().includes(searchQuery) ||
+                       c.pvsd.toLowerCase().includes(searchQuery);
+            });
 
             const topBadge = document.getElementById('topTotalContactsBadge');
             if (searchQuery) {
                 topBadge.innerText = `Showing: ${filteredClients.length} / ${clients.length} Contacts`;
                 flashMsg.style.display = 'block';
-                flashMsg.innerHTML = `🔍 Found <strong>${filteredClients.length}</strong> matching record(s) for "<em>${escapeHtml(searchQuery)}</em>". Click any item below the search box to view and print summary.`;
+                flashMsg.innerHTML = `🔍 Found <strong>${filteredClients.length}</strong> matching record(s) for "<em>${escapeHtml(searchQuery)}</em>".`;
             } else {
                 topBadge.innerText = `Total Contacts: ${clients.length}`;
                 flashMsg.style.display = 'none';
             }
 
             if (filteredClients.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: #64748b;">No matching client records found.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: #64748b;">No matching client records found in cloud database.</td></tr>`;
                 return;
             }
 
@@ -1078,9 +919,11 @@
                 tr.className = 'record-row';
                 tr.onclick = (e) => {
                     if (!e.target.closest('.action-cell')) {
-                        selectRecordFromSearch(c.originalIndex);
+                        selectRecordFromSearch(c.id);
                     }
                 };
+
+                const globalIndex = clients.findIndex(item => item.id === c.id);
 
                 tr.innerHTML = `
                     <td>${displayIndex + 1}</td>
@@ -1094,13 +937,18 @@
                     <td>${escapeHtml(c.clientAddress)}</td>
                     <td>${escapeHtml(c.otherNote || '-')}</td>
                     <td class="action-cell">
-                        <button class="btn-view" onclick="selectRecordFromSearch(${c.originalIndex})">View & Print</button>
-                        <button class="btn-edit" onclick="editRecord(${c.originalIndex})">Edit</button>
-                        <button class="btn-delete" onclick="deleteRecord('${c.id}')">Delete</button>
+                        <button class="btn-view" onclick="window.viewRecord('${c.id}')">View & Print</button>
+                        <button class="btn-edit" onclick="window.editRecord('${c.id}')">Edit</button>
+                        <button class="btn-delete" onclick="window.deleteRecord('${c.id}')">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
+        }
+
+        window.viewRecord = function(docId) {
+            const index = clients.findIndex(c => c.id === docId);
+            if (index !== -1) showSummaryModal(index);
         }
 
         function showSummaryModal(index) {
@@ -1146,22 +994,23 @@
                     <span class="summary-value">${escapeHtml(c.otherNote || 'None')}</span>
                 </div>
             `;
-
             document.getElementById('summaryModal').style.display = 'flex';
         }
 
-        function hideModal() {
+        window.hideModal = function() {
             document.getElementById('summaryModal').style.display = 'none';
         }
 
-        function closeSummaryModal(event) {
+        window.closeSummaryModal = function(event) {
             if (event.target.id === 'summaryModal') {
-                hideModal();
+                window.hideModal();
             }
         }
 
-        function editRecord(index) {
-            const c = clients[index];
+        window.editRecord = function(docId) {
+            const c = clients.find(item => item.id === docId);
+            if (!c) return;
+
             document.getElementById('courtName').value = c.courtName;
             document.getElementById('pvsd').value = c.pvsd;
             document.getElementById('section').value = c.section;
@@ -1172,56 +1021,135 @@
             document.getElementById('clientAddress').value = c.clientAddress;
             document.getElementById('otherNote').value = c.otherNote || '';
 
-            document.getElementById('editDocId').value = c.id;
+            document.getElementById('editDocId').value = docId;
             document.getElementById('saveBtn').innerText = 'Update Record';
             document.getElementById('cancelBtn').style.display = 'inline-block';
             
-            checkDuplicatePvsd();
+            window.checkDuplicatePvsd();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Delete Document directly from Cloud Database
-        async function deleteRecord(docId) {
-            if (confirm('Are you sure you want to delete this record from Cloud Database?')) {
+        window.deleteRecord = async function(docId) {
+            if (confirm('Are you sure you want to delete this client record from the cloud database?')) {
                 try {
-                    await clientsCollection.doc(docId).delete();
+                    await deleteDoc(doc(db, "clients", docId));
                 } catch (err) {
-                    alert("Error deleting record from cloud: " + err.message);
+                    console.error("Error deleting document: ", err);
+                    alert("Error removing record.");
                 }
             }
         }
 
-        function resetForm() {
+        window.resetForm = function() {
             document.getElementById('clientForm').reset();
             document.getElementById('editDocId').value = '';
             document.getElementById('saveBtn').innerText = 'Save Record';
             document.getElementById('cancelBtn').style.display = 'none';
-            checkDuplicatePvsd();
+            window.checkDuplicatePvsd();
         }
 
-        function backupData() {
-            if (clients.length === 0) {
-                alert('No data available to backup!');
-                return;
-            }
-            const cleanClients = clients.map(({ id, ...rest }) => rest);
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanClients, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `Client_Database_Backup_${new Date().toISOString().slice(0, 10)}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
+        // --- EXCEL IMPORT & TEMPLATE FUNCTIONS ---
+        window.triggerExcelImport = function() {
+            document.getElementById('excelFileInput').click();
         }
 
-        function exportToCSV() {
+        window.downloadExcelTemplate = function() {
+            const templateData = [
+                {
+                    "Court Name": "District Court",
+                    "Plaintiff V/s Defendant": "State V/s John Doe",
+                    "Section": "Section 302",
+                    "Institution Date": "2026-01-15",
+                    "Client Name": "John Doe",
+                    "Client Mobile Number 1": "9876543210",
+                    "Client Mobile Number 2": "9123456789",
+                    "Client Address": "Main Street, City",
+                    "Other Note": "First hearing completed"
+                }
+            ];
+            const worksheet = XLSX.utils.json_to_sheet(templateData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "ClientTemplate");
+            XLSX.writeFile(workbook, "Client_Import_Template.xlsx");
+        }
+
+        window.importExcelData = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (jsonRows.length === 0) {
+                        alert('The uploaded Excel file is empty.');
+                        event.target.value = '';
+                        return;
+                    }
+
+                    const newRecords = [];
+                    const duplicateErrors = [];
+
+                    jsonRows.forEach((row, rowIndex) => {
+                        const courtName = String(row['Court Name'] || row['courtName'] || '').trim();
+                        const pvsd = String(row['Plaintiff V/s Defendant'] || row['pvsd'] || '').trim();
+                        const section = String(row['Section'] || row['section'] || '').trim();
+                        const institutionDate = String(row['Institution Date'] || row['institutionDate'] || '').trim();
+                        const clientName = String(row['Client Name'] || row['clientName'] || '').trim();
+                        const mobile1 = String(row['Client Mobile Number 1'] || row['mobile1'] || '').trim();
+                        const mobile2 = String(row['Client Mobile Number 2'] || row['mobile2'] || '').trim();
+                        const clientAddress = String(row['Client Address'] || row['clientAddress'] || '').trim();
+                        const otherNote = String(row['Other Note'] || row['otherNote'] || '').trim();
+
+                        if (!courtName || !pvsd || !clientName || !mobile1) return;
+
+                        const formattedRecord = { courtName, pvsd, section, institutionDate, clientName, mobile1, mobile2, clientAddress, otherNote };
+
+                        const isDuplicateInExisting = clients.some(c => c.pvsd.toLowerCase() === pvsd.toLowerCase());
+                        const isDuplicateInBatch = newRecords.some(c => c.pvsd.toLowerCase() === pvsd.toLowerCase());
+
+                        if (isDuplicateInExisting || isDuplicateInBatch) {
+                            duplicateErrors.push(`Row ${rowIndex + 2}: Plaintiff V/s Defendant "${pvsd}" already exists.`);
+                        } else {
+                            newRecords.push(formattedRecord);
+                        }
+                    });
+
+                    if (duplicateErrors.length > 0) {
+                        alert(`❌ Import Failed: Duplicate records detected!\n\nNo data has been imported.\n\nDetails:\n` + duplicateErrors.slice(0, 5).join('\n'));
+                        event.target.value = '';
+                        return;
+                    }
+
+                    if (newRecords.length > 0) {
+                        for (let record of newRecords) {
+                            await addDoc(collection(db, "clients"), record);
+                        }
+                        alert(`✅ Successfully imported ${newRecords.length} client record(s) directly to Firebase!`);
+                    } else {
+                        alert('No valid records found to import.');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Error reading Excel file or writing to Firebase.');
+                }
+                event.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        window.exportToCSV = function() {
             if (clients.length === 0) {
                 alert('No data available to export!');
                 return;
             }
 
             const headers = ["S.No", "Court Name", "Plaintiff V/s Defendant", "Section", "Institution Date", "Client Name", "Mobile Number 1", "Mobile Number 2", "Client Address", "Other Note"];
-            
             const rows = clients.map((c, i) => [
                 i + 1,
                 `"${c.courtName.replace(/"/g, '""')}"`,
@@ -1245,7 +1173,7 @@
             document.body.removeChild(link);
         }
 
-        function exportToPDF() {
+        window.exportToPDF = function() {
             if (clients.length === 0) {
                 alert('No data available to export!');
                 return;
@@ -1255,20 +1183,11 @@
             const doc = new jsPDF({ orientation: 'landscape' });
 
             doc.setFontSize(16);
-            doc.text("Client Case Records", 14, 15);
+            doc.text("Client Case Records (Cloud Database)", 14, 15);
 
             const tableColumn = ["#", "Court Name", "Plaintiff V/s Defendant", "Section", "Inst. Date", "Client Name", "Mobile 1", "Mobile 2", "Address", "Note"];
             const tableRows = clients.map((c, i) => [
-                i + 1,
-                c.courtName,
-                c.pvsd,
-                c.section,
-                c.institutionDate,
-                c.clientName,
-                c.mobile1,
-                c.mobile2 || '-',
-                c.clientAddress,
-                c.otherNote || '-'
+                i + 1, c.courtName, c.pvsd, c.section, c.institutionDate, c.clientName, c.mobile1, c.mobile2 || '-', c.clientAddress, c.otherNote || '-'
             ]);
 
             doc.autoTable({
