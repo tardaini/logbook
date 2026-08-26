@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Client Management System - Firebase</title>
+    <title>Legal Client Management System</title>
     <!-- jsPDF and AutoTable for PDF Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-    <!-- SheetJS for Excel Import & Template Generation -->
+    <!-- SheetJS Library for Excel Import -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Firebase SDKs (v10.8.0 Compat Mode for HTML direct script use) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <style>
         :root {
@@ -223,7 +227,6 @@
             display: flex;
             gap: 10px;
             align-items: center;
-            flex-wrap: wrap;
         }
 
         .counter-badge {
@@ -309,7 +312,6 @@
             box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
         }
 
-        /* Continuous Flashing Warning Animation */
         @keyframes flashWarning {
             0% { background-color: #fef3c7; border-color: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
             50% { background-color: #ffffff; border-color: #cbd5e1; box-shadow: none; }
@@ -320,7 +322,6 @@
             animation: flashWarning 0.6s infinite alternate;
         }
 
-        /* Duplicate Alert Box & Case Details List */
         .duplicate-alert-container {
             display: none;
             margin-top: 8px;
@@ -390,11 +391,8 @@
         .btn-restore { background-color: #8b5cf6; }
         .btn-restore:hover { background-color: #7c3aed; }
 
-        .btn-excel-import { background-color: #047857; }
-        .btn-excel-import:hover { background-color: #065f46; }
-
-        .btn-excel-template { background-color: #6366f1; }
-        .btn-excel-template:hover { background-color: #4f46e5; }
+        .btn-excel-import { background-color: #059669; }
+        .btn-excel-import:hover { background-color: #047857; }
 
         .btn-logout { background-color: #475569; }
         .btn-logout:hover { background-color: #334155; }
@@ -436,7 +434,6 @@
             background-color: #f1f5f9;
         }
 
-        /* Modal Summary Popup Styling */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -517,7 +514,6 @@
             word-break: break-word;
         }
 
-        /* Print formatting */
         @media print {
             body * { visibility: hidden; }
             #summaryModal, #summaryModal * { visibility: visible; }
@@ -563,29 +559,23 @@
 
     <!-- MAIN APP CONTAINER -->
     <div class="container app-container" id="appContainer">
-        <!-- Top Bar with Integrated Search -->
         <div class="top-bar">
             <div class="top-bar-left">
-                <div class="top-bar-title">System Control (Cloud Sync)</div>
+                <div class="top-bar-title">System Control</div>
                 <div class="counter-badge" id="topTotalContactsBadge">Total Contacts: 0</div>
             </div>
 
-            <!-- Integrated Live Search Bar -->
             <div class="top-search-container">
                 <input type="text" id="searchInput" class="top-search-input" placeholder="🔍 Search contacts by name, mobile, court, or party..." oninput="handleSearchInput()">
-                
-                <!-- Matching Search Dropdown List -->
                 <div id="searchResultsDropdown" class="search-results-dropdown"></div>
             </div>
 
             <div class="top-bar-actions">
                 <button type="button" class="btn-excel-import" onclick="triggerExcelImport()">Excel Import</button>
-                <button type="button" class="btn-excel-template" onclick="downloadExcelTemplate()">Download Excel Format</button>
-                <button type="button" class="btn-backup" onclick="backupData()">Backup JSON</button>
-                <button type="button" class="btn-restore" onclick="triggerRestore()">Restore JSON</button>
+                <button type="button" class="btn-backup" onclick="backupData()">Backup Data</button>
+                <button type="button" class="btn-restore" onclick="triggerRestore()">Restore Data</button>
                 <button type="button" class="btn-logout" onclick="logout()">Logout</button>
-                
-                <!-- Hidden File Inputs -->
+
                 <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="importExcelData(event)">
                 <input type="file" id="restoreFileInput" accept=".json" style="display: none;" onchange="restoreData(event)">
             </div>
@@ -593,7 +583,6 @@
 
         <h1>Client Case Management System</h1>
 
-        <!-- Form Card -->
         <div class="card">
             <h2>Add / Edit Client Details</h2>
             <form id="clientForm">
@@ -609,7 +598,6 @@
                         <label for="pvsd">Plaintiff V/s Defendant *</label>
                         <input type="text" id="pvsd" required placeholder="e.g. John Doe V/s Jane Smith" oninput="checkDuplicatePvsd()">
                         
-                        <!-- Warning Alert & Details Box -->
                         <div id="duplicateAlertContainer" class="duplicate-alert-container">
                             <div class="duplicate-alert-header">⚠️ Warning: Similar Case Found!</div>
                             <div id="duplicateMatchesList"></div>
@@ -662,10 +650,8 @@
             </form>
         </div>
 
-        <!-- Table Card -->
         <div class="card">
-            <h2>Stored Records (Cloud Database)</h2>
-
+            <h2>Stored Records</h2>
             <div id="searchFlashMsg" class="search-flash-msg"></div>
 
             <div class="table-responsive">
@@ -698,9 +684,7 @@
                 <h3>📋 Client Record Summary</h3>
                 <button class="close-modal" onclick="hideModal()">&times;</button>
             </div>
-            <div class="summary-grid" id="modalSummaryContent">
-                <!-- Summary Details Populated Dynamically -->
-            </div>
+            <div class="summary-grid" id="modalSummaryContent"></div>
             <div class="modal-actions-print" style="margin-top: 20px; text-align: right; display: flex; justify-content: flex-end; gap: 10px;">
                 <button type="button" class="btn-print" onclick="window.print()">Print Summary</button>
                 <button type="button" class="btn-cancel" onclick="hideModal()">Close</button>
@@ -708,45 +692,46 @@
         </div>
     </div>
 
-    <!-- Firebase SDK Scripts (Modular Version via CDN) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        // Your Firebase Configuration
+    <script>
+        // -------------------------------------------------------------
+        // FIREBASE CONFIGURATION (UPDATED WITH YOUR REAL KEYS)
+        // -------------------------------------------------------------
         const firebaseConfig = {
-  apiKey: "AIzaSyD2laXbCMI66QTxsMUYZK_NWK4pr-btnBE",
-  authDomain: "contact-d0800.firebaseapp.com",
-  projectId: "contact-d0800",
-  storageBucket: "contact-d0800.firebasestorage.app",
-  messagingSenderId: "237271579660",
-  appId: "1:237271579660:web:b754cbe38870054b8dc229",
-  measurementId: "G-039M02BZE4"
-};
+            apiKey: "AIzaSyD2laXbCMI66QTxsMUYZK_NWK4pr-btnBE",
+            authDomain: "contact-d0800.firebaseapp.com",
+            projectId: "contact-d0800",
+            storageBucket: "contact-d0800.firebasestorage.app",
+            messagingSenderId: "237271579660",
+            appId: "1:237271579660:web:b754cbe38870054b8dc229",
+            measurementId: "G-039M02BZE4"
+        };
 
-        // Initialize Firebase & Firestore
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const COLLECTION_NAME = "clients";
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const clientsCollection = db.collection("clientCaseRecords");
 
         let clients = [];
+        let unsubscribeRealtime = null;
 
-        // Check session login status on page load
         document.addEventListener('DOMContentLoaded', () => {
-            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+            if (isLoggedInCookieSet()) {
                 showApp();
             } else {
                 document.getElementById('loginOverlay').style.display = 'flex';
                 document.getElementById('appContainer').style.display = 'none';
             }
 
-            // Close search dropdown on click outside
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.top-search-container')) {
                     document.getElementById('searchResultsDropdown').style.display = 'none';
                 }
             });
         });
+
+        function isLoggedInCookieSet() {
+            return document.cookie.split('; ').some(row => row.startsWith('isLoggedIn=true'));
+        }
 
         // Handle Login Submission
         document.getElementById('loginForm').addEventListener('submit', function(e) {
@@ -756,7 +741,7 @@
             const errorMsg = document.getElementById('loginError');
 
             if (id === 'Admin' && pass === 'Admin@123') {
-                sessionStorage.setItem('isLoggedIn', 'true');
+                document.cookie = "isLoggedIn=true; path=/; max-age=86400"; // 24-hour persistent cookie
                 errorMsg.style.display = 'none';
                 showApp();
             } else {
@@ -764,41 +749,36 @@
             }
         });
 
-        // Display Main Application and Load Cloud Records
-        async function showApp() {
+        // Display Main Application and Setup Firestore Realtime Sync
+        function showApp() {
             document.getElementById('loginOverlay').style.display = 'none';
             document.getElementById('appContainer').style.display = 'block';
-            await loadRecordsFromFirestore();
+
+            // Real-time Cloud Sync Listener across devices
+            unsubscribeRealtime = clientsCollection.onSnapshot((snapshot) => {
+                clients = [];
+                snapshot.forEach((doc) => {
+                    clients.push({ id: doc.id, ...doc.data() });
+                });
+                renderTable();
+            }, (error) => {
+                console.error("Firebase Sync Error: ", error);
+            });
         }
 
         // Logout function
-        window.logout = function() {
-            sessionStorage.removeItem('isLoggedIn');
+        function logout() {
+            document.cookie = "isLoggedIn=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            if (unsubscribeRealtime) unsubscribeRealtime();
             location.reload();
         }
 
-        // Load data from Firebase Firestore
-        async function loadRecordsFromFirestore() {
-            try {
-                const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
-                clients = [];
-                querySnapshot.forEach((documentSnap) => {
-                    clients.push({ id: documentSnap.id, ...documentSnap.data() });
-                });
-                renderTable();
-            } catch (error) {
-                console.error("Error loading documents from Firestore: ", error);
-                alert("Failed to load data from Firebase cloud storage.");
-            }
-        }
-
         // Search Input Handler
-        window.handleSearchInput = function() {
+        function handleSearchInput() {
             renderTable();
             renderSearchDropdown();
         }
 
-        // Render matching live search results
         function renderSearchDropdown() {
             const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
             const dropdown = document.getElementById('searchResultsDropdown');
@@ -841,22 +821,20 @@
             dropdown.style.display = 'block';
         }
 
-        window.selectRecordFromSearch = function(originalIndex) {
+        function selectRecordFromSearch(originalIndex) {
             showSummaryModal(originalIndex);
             setTimeout(() => {
                 window.print();
             }, 300);
         }
 
-        // Real-time Check for 4+ Matching Characters in Plaintiff V/s Defendant Field
-        window.checkDuplicatePvsd = function() {
+        function checkDuplicatePvsd() {
             const pvsdInput = document.getElementById('pvsd');
             const alertContainer = document.getElementById('duplicateAlertContainer');
             const matchesList = document.getElementById('duplicateMatchesList');
             const editDocId = document.getElementById('editDocId').value;
             const val = pvsdInput.value.trim().toLowerCase();
 
-            // Reset if input length is less than 4
             if (val.length < 4) {
                 pvsdInput.classList.remove('input-duplicate-flash');
                 alertContainer.style.display = 'none';
@@ -864,16 +842,13 @@
                 return false;
             }
 
-            // Find all records that contain the entered string (4+ chars)
             const matchingRecords = clients.filter((client) => {
-                if (editDocId && client.id === editDocId) return false;
+                if (editDocId !== "" && client.id === editDocId) return false;
                 return client.pvsd.toLowerCase().includes(val);
             });
 
             if (matchingRecords.length > 0) {
                 pvsdInput.classList.add('input-duplicate-flash');
-                
-                // Build HTML list of details for matching cases
                 matchesList.innerHTML = matchingRecords.map(c => `
                     <div class="duplicate-match-item">
                         <strong>Title:</strong> ${escapeHtml(c.pvsd)}<br>
@@ -891,12 +866,12 @@
             }
         }
 
-        // Form Submit Handler (Saves to Firestore)
+        // Cloud Form Submit Handler (Firebase Firestore Add/Update)
         document.getElementById('clientForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            if (window.checkDuplicatePvsd()) {
-                alert('⚠️ Warning: Similar Case Found!\n\nA matching or similar Plaintiff V/s Defendant entry already exists in the records. Please review the case details under the input field.');
+            if (checkDuplicatePvsd()) {
+                alert('⚠️ Warning: Similar Case Found!\n\nA matching or similar Plaintiff V/s Defendant entry already exists in the records.');
                 document.getElementById('pvsd').focus();
                 return;
             }
@@ -916,24 +891,157 @@
             const editDocId = document.getElementById('editDocId').value;
 
             try {
-                if (!editDocId) {
-                    // Add new document to Firestore
-                    await addDoc(collection(db, COLLECTION_NAME), clientData);
+                if (editDocId === "") {
+                    // Create New Record in Cloud
+                    await clientsCollection.add(clientData);
                 } else {
-                    // Update existing document in Firestore
-                    const docRef = doc(db, COLLECTION_NAME, editDocId);
-                    await updateDoc(docRef, clientData);
+                    // Update Record in Cloud
+                    await clientsCollection.doc(editDocId).update(clientData);
                 }
-
-                await loadRecordsFromFirestore();
-                window.resetForm();
-            } catch (error) {
-                console.error("Error saving document: ", error);
-                alert("Failed to save record to Firebase cloud database.");
+                resetForm();
+            } catch (err) {
+                alert("Error saving record to cloud: " + err.message);
             }
         });
 
-        // Render records in table
+        function isRecordDuplicate(existingRecords, candidateRecord) {
+            const candName = (candidateRecord.clientName || '').trim().toLowerCase();
+            const candPvsd = (candidateRecord.pvsd || '').trim().toLowerCase();
+
+            return existingRecords.some(item => {
+                const existingName = (item.clientName || '').trim().toLowerCase();
+                const existingPvsd = (item.pvsd || '').trim().toLowerCase();
+                return (candName !== '' && candName === existingName) &&
+                       (candPvsd !== '' && candPvsd === existingPvsd);
+            });
+        }
+
+        function triggerExcelImport() {
+            document.getElementById('excelFileInput').click();
+        }
+
+        function importExcelData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    if (!jsonData || jsonData.length === 0) {
+                        alert('The selected Excel file is empty.');
+                        return;
+                    }
+
+                    let addedCount = 0;
+                    let duplicateCount = 0;
+
+                    const batch = db.batch();
+
+                    jsonData.forEach(row => {
+                        let formattedDate = '';
+                        const rawDate = row['Case Institution Date'] || row['Institution Date'] || row['Date'] || '';
+                        
+                        if (rawDate instanceof Date) {
+                            formattedDate = rawDate.toISOString().split('T')[0];
+                        } else {
+                            formattedDate = String(rawDate).trim();
+                        }
+
+                        const newClient = {
+                            courtName: String(row['Court Name'] || '').trim(),
+                            pvsd: String(row['Plaintiff V/s Defendant'] || row['Pvsd'] || '').trim(),
+                            section: String(row['Section'] || '').trim(),
+                            institutionDate: formattedDate,
+                            clientName: String(row['Client Name'] || '').trim(),
+                            mobile1: String(row['Client Mobile Number 1'] || row['Mobile 1'] || '').trim(),
+                            mobile2: String(row['Client Mobile Number 2'] || row['Mobile 2'] || '').trim(),
+                            clientAddress: String(row['Client Address'] || row['Address'] || '').trim(),
+                            otherNote: String(row['Other Note'] || row['Note'] || '').trim()
+                        };
+
+                        if (!newClient.clientName && !newClient.courtName && !newClient.pvsd) {
+                            return;
+                        }
+
+                        if (isRecordDuplicate(clients, newClient)) {
+                            duplicateCount++;
+                        } else {
+                            const newDocRef = clientsCollection.doc();
+                            batch.set(newDocRef, newClient);
+                            addedCount++;
+                        }
+                    });
+
+                    await batch.commit();
+                    resetForm();
+                    alert(`Excel Import Complete:\n• Added ${addedCount} new unique record(s) to Cloud.\n• Skipped ${duplicateCount} duplicate record(s).`);
+                } catch (err) {
+                    alert('Error importing data to Cloud: ' + err.message);
+                }
+                event.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function triggerRestore() {
+            document.getElementById('restoreFileInput').click();
+        }
+
+        function restoreData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        let addedCount = 0;
+                        let duplicateCount = 0;
+                        const batch = db.batch();
+
+                        importedData.forEach(item => {
+                            const candidate = {
+                                courtName: String(item.courtName || '').trim(),
+                                pvsd: String(item.pvsd || '').trim(),
+                                section: String(item.section || '').trim(),
+                                institutionDate: String(item.institutionDate || '').trim(),
+                                clientName: String(item.clientName || '').trim(),
+                                mobile1: String(item.mobile1 || '').trim(),
+                                mobile2: String(item.mobile2 || '').trim(),
+                                clientAddress: String(item.clientAddress || '').trim(),
+                                otherNote: String(item.otherNote || '').trim()
+                            };
+
+                            if (isRecordDuplicate(clients, candidate)) {
+                                duplicateCount++;
+                            } else {
+                                const newDocRef = clientsCollection.doc();
+                                batch.set(newDocRef, candidate);
+                                addedCount++;
+                            }
+                        });
+
+                        await batch.commit();
+                        resetForm();
+                        alert(`Data Restore Complete:\n• Added ${addedCount} record(s) to Cloud.\n• Skipped ${duplicateCount} duplicate record(s).`);
+                    } else {
+                        alert('Invalid backup file format.');
+                    }
+                } catch (err) {
+                    alert('Error restoring backup JSON file to Cloud.');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
         function renderTable() {
             const tbody = document.getElementById('tableBody');
             const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
@@ -954,7 +1062,7 @@
             if (searchQuery) {
                 topBadge.innerText = `Showing: ${filteredClients.length} / ${clients.length} Contacts`;
                 flashMsg.style.display = 'block';
-                flashMsg.innerHTML = `🔍 Found <strong>${filteredClients.length}</strong> matching record(s) for "<em>${escapeHtml(searchQuery)}</em>". Click any item below the search box to view and print individual summary.`;
+                flashMsg.innerHTML = `🔍 Found <strong>${filteredClients.length}</strong> matching record(s) for "<em>${escapeHtml(searchQuery)}</em>". Click any item below the search box to view and print summary.`;
             } else {
                 topBadge.innerText = `Total Contacts: ${clients.length}`;
                 flashMsg.style.display = 'none';
@@ -995,7 +1103,6 @@
             });
         }
 
-        // Show Summary Modal
         function showSummaryModal(index) {
             const c = clients[index];
             if (!c) return;
@@ -1043,18 +1150,17 @@
             document.getElementById('summaryModal').style.display = 'flex';
         }
 
-        window.hideModal = function() {
+        function hideModal() {
             document.getElementById('summaryModal').style.display = 'none';
         }
 
-        window.closeSummaryModal = function(event) {
+        function closeSummaryModal(event) {
             if (event.target.id === 'summaryModal') {
-                window.hideModal();
+                hideModal();
             }
         }
 
-        // Edit Record
-        window.editRecord = function(index) {
+        function editRecord(index) {
             const c = clients[index];
             document.getElementById('courtName').value = c.courtName;
             document.getElementById('pvsd').value = c.pvsd;
@@ -1070,42 +1176,36 @@
             document.getElementById('saveBtn').innerText = 'Update Record';
             document.getElementById('cancelBtn').style.display = 'inline-block';
             
-            window.checkDuplicatePvsd();
+            checkDuplicatePvsd();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Delete Record from Firestore
-        window.deleteRecord = async function(docId) {
-            if (confirm('Are you sure you want to delete this client record from Firebase cloud?')) {
+        // Delete Document directly from Cloud Database
+        async function deleteRecord(docId) {
+            if (confirm('Are you sure you want to delete this record from Cloud Database?')) {
                 try {
-                    await deleteDoc(doc(db, COLLECTION_NAME, docId));
-                    await loadRecordsFromFirestore();
-                    window.checkDuplicatePvsd();
-                } catch (error) {
-                    console.error("Error deleting document: ", error);
-                    alert("Failed to delete record from database.");
+                    await clientsCollection.doc(docId).delete();
+                } catch (err) {
+                    alert("Error deleting record from cloud: " + err.message);
                 }
             }
         }
 
-        // Reset Form
-        window.resetForm = function() {
+        function resetForm() {
             document.getElementById('clientForm').reset();
             document.getElementById('editDocId').value = '';
             document.getElementById('saveBtn').innerText = 'Save Record';
             document.getElementById('cancelBtn').style.display = 'none';
-            window.checkDuplicatePvsd();
+            checkDuplicatePvsd();
         }
 
-        // Backup Data (JSON)
-        window.backupData = function() {
+        function backupData() {
             if (clients.length === 0) {
                 alert('No data available to backup!');
                 return;
             }
-            // Strip out internal Firebase doc IDs for standard export
-            const cleanData = clients.map(({ id, ...rest }) => rest);
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanData, null, 2));
+            const cleanClients = clients.map(({ id, ...rest }) => rest);
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cleanClients, null, 2));
             const downloadAnchor = document.createElement('a');
             downloadAnchor.setAttribute("href", dataStr);
             downloadAnchor.setAttribute("download", `Client_Database_Backup_${new Date().toISOString().slice(0, 10)}.json`);
@@ -1114,153 +1214,7 @@
             downloadAnchor.remove();
         }
 
-        // Restore Data (JSON)
-        window.triggerRestore = function() {
-            document.getElementById('restoreFileInput').click();
-        }
-
-        window.restoreData = async function(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                try {
-                    const importedData = JSON.parse(e.target.result);
-                    if (Array.isArray(importedData)) {
-                        if (confirm(`Found ${importedData.length} records in backup file. Do you want to upload and add them to your Firebase cloud database?`)) {
-                            for (const item of importedData) {
-                                delete item.id;
-                                await addDoc(collection(db, COLLECTION_NAME), item);
-                            }
-                            await loadRecordsFromFirestore();
-                            window.checkDuplicatePvsd();
-                            alert('Data successfully restored and uploaded to Firebase!');
-                        }
-                    } else {
-                        alert('Invalid backup file format.');
-                    }
-                } catch (err) {
-                    console.error(err);
-                    alert('Error parsing backup JSON file.');
-                }
-                event.target.value = '';
-            };
-            reader.readAsText(file);
-        }
-
-        // --- EXCEL IMPORT & TEMPLATE FUNCTIONS ---
-        window.triggerExcelImport = function() {
-            document.getElementById('excelFileInput').click();
-        }
-
-        window.downloadExcelTemplate = function() {
-            const templateData = [
-                {
-                    "Court Name": "District Court",
-                    "Plaintiff V/s Defendant": "State V/s John Doe",
-                    "Section": "Section 302",
-                    "Institution Date": "2026-01-15",
-                    "Client Name": "John Doe",
-                    "Client Mobile Number 1": "9876543210",
-                    "Client Mobile Number 2": "9123456789",
-                    "Client Address": "Main Street, City",
-                    "Other Note": "First hearing completed"
-                }
-            ];
-
-            const worksheet = XLSX.utils.json_to_sheet(templateData);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "ClientTemplate");
-            XLSX.writeFile(workbook, "Client_Import_Template.xlsx");
-        }
-
-        window.importExcelData = async function(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonRows = XLSX.utils.sheet_to_json(worksheet);
-
-                    if (jsonRows.length === 0) {
-                        alert('The uploaded Excel file is empty.');
-                        event.target.value = '';
-                        return;
-                    }
-
-                    const newRecords = [];
-                    const duplicateErrors = [];
-
-                    jsonRows.forEach((row, rowIndex) => {
-                        const courtName = String(row['Court Name'] || row['courtName'] || '').trim();
-                        const pvsd = String(row['Plaintiff V/s Defendant'] || row['pvsd'] || '').trim();
-                        const section = String(row['Section'] || row['section'] || '').trim();
-                        const institutionDate = String(row['Institution Date'] || row['institutionDate'] || '').trim();
-                        const clientName = String(row['Client Name'] || row['clientName'] || '').trim();
-                        const mobile1 = String(row['Client Mobile Number 1'] || row['mobile1'] || '').trim();
-                        const mobile2 = String(row['Client Mobile Number 2'] || row['mobile2'] || '').trim();
-                        const clientAddress = String(row['Client Address'] || row['clientAddress'] || '').trim();
-                        const otherNote = String(row['Other Note'] || row['otherNote'] || '').trim();
-
-                        if (!courtName || !pvsd || !clientName || !mobile1) {
-                            return; 
-                        }
-
-                        const formattedRecord = {
-                            courtName,
-                            pvsd,
-                            section,
-                            institutionDate,
-                            clientName,
-                            mobile1,
-                            mobile2,
-                            clientAddress,
-                            otherNote
-                        };
-
-                        const isDuplicateInExisting = clients.some(c => c.pvsd.toLowerCase() === pvsd.toLowerCase());
-                        const isDuplicateInBatch = newRecords.some(c => c.pvsd.toLowerCase() === pvsd.toLowerCase());
-
-                        if (isDuplicateInExisting || isDuplicateInBatch) {
-                            duplicateErrors.push(`Row ${rowIndex + 2}: Plaintiff V/s Defendant "${pvsd}" already exists.`);
-                        } else {
-                            newRecords.push(formattedRecord);
-                        }
-                    });
-
-                    if (duplicateErrors.length > 0) {
-                        alert(`❌ Import Failed: Duplicate records detected!\n\nNo data has been imported.\n\nDetails:\n` + duplicateErrors.slice(0, 5).join('\n'));
-                        event.target.value = '';
-                        return;
-                    }
-
-                    if (newRecords.length > 0) {
-                        for (const rec of newRecords) {
-                            await addDoc(collection(db, COLLECTION_NAME), rec);
-                        }
-                        await loadRecordsFromFirestore();
-                        window.checkDuplicatePvsd();
-                        alert(`✅ Successfully imported and saved ${newRecords.length} client record(s) to Firebase!`);
-                    } else {
-                        alert('No valid records found to import.');
-                    }
-                } catch (err) {
-                    console.error(err);
-                    alert('Error reading Excel file. Please ensure it matches the correct template format.');
-                }
-                event.target.value = '';
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // Export CSV
-        window.exportToCSV = function() {
+        function exportToCSV() {
             if (clients.length === 0) {
                 alert('No data available to export!');
                 return;
@@ -1291,8 +1245,7 @@
             document.body.removeChild(link);
         }
 
-        // Export PDF
-        window.exportToPDF = function() {
+        function exportToPDF() {
             if (clients.length === 0) {
                 alert('No data available to export!');
                 return;
@@ -1302,7 +1255,7 @@
             const doc = new jsPDF({ orientation: 'landscape' });
 
             doc.setFontSize(16);
-            doc.text("Client Case Records (Firebase Cloud)", 14, 15);
+            doc.text("Client Case Records", 14, 15);
 
             const tableColumn = ["#", "Court Name", "Plaintiff V/s Defendant", "Section", "Inst. Date", "Client Name", "Mobile 1", "Mobile 2", "Address", "Note"];
             const tableRows = clients.map((c, i) => [
